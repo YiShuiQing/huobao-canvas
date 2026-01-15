@@ -40,5 +40,5 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/huobao-canvas:latest
-            ghcr.io/${{ github.repository_owner }}/huobao-canvas:${{ github.sha }}
+            ghcr.io/${{ toLower(github.repository_owner) }}/huobao-canvas:latest
+            ghcr.io/${{ toLower(github.repository_owner) }}/huobao-canvas:${{ github.sha }}
