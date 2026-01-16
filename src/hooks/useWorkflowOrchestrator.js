@@ -22,6 +22,39 @@ const WORKFLOW_TYPES = {
   TEXT_TO_IMAGE: 'text_to_image',
   TEXT_TO_IMAGE_TO_VIDEO: 'text_to_image_to_video',
   STORYBOARD: 'storyboard', // 分镜工作流
+  MULTI_ANGLE_STORYBOARD: 'multi_angle_storyboard', // 多角度分镜工作流
+}
+
+// Multi-angle prompts | 多角度提示词模板
+const MULTI_ANGLE_PROMPTS = {
+  front: {
+    label: '正视',
+    english: 'Front View',
+    prompt: (character) => `使用提供的图片，生成四宫格分镜，每张四宫格包括人物正面对着镜头的4个景别（远景、中景、近景、和局部特写），保持场景、产品、人物特征的一致性，宫格里的每一张照片保持和提供图片相同的比例。并在图片下方用英文标注这个景别
+
+角色参考: ${character}`
+  },
+  side: {
+    label: '侧视',
+    english: 'Side View', 
+    prompt: (character) => `使用提供的图片，分别生成四宫格分镜，每张四宫格包括人物侧面角度的4个景别（远景、中景、近景、和局部特写），保持场景、产品、人物特征的一致性，宫格里的每一张照片保持和提供图片相同的比例。并在图片下方用英文标注这个景别
+
+角色参考: ${character}`
+  },
+  back: {
+    label: '后视',
+    english: 'Back View',
+    prompt: (character) => `使用提供的图片，分别生成四宫格分镜，每张四宫格包括人物背影角度的4个景别（远景、中景、近景、和局部特写），保持场景、产品、人物特征的一致性，宫格里的每一张照片保持和提供图片相同的比例。并在图片下方用英文标注这个景别
+
+角色参考: ${character}`
+  },
+  top: {
+    label: '俯视',
+    english: 'Top/Bird\'s Eye View',
+    prompt: (character) => `使用提供的图片，分别生成四宫格分镜，每张四宫格包括俯视角度的4个景别（远景、中景、近景、和局部特写），保持场景、产品、人物特征的一致性，宫格里的每一张照片保持和提供图片相同的比例。并在图片下方用英文标注这个景别
+
+角色参考: ${character}`
+  }
 }
 
 // System prompt for intent analysis | 意图分析系统提示词
@@ -31,10 +64,11 @@ const INTENT_ANALYSIS_PROMPT = `你是一个工作流分析助手。根据用户
 1. text_to_image - 用户想要生成单张图片（默认）
 2. text_to_image_to_video - 用户想要生成图片并转成视频（包含"视频"、"动画"、"动起来"等关键词）
 3. storyboard - 用户想要生成分镜/多场景图片（包含"分镜"、"场景一"、"镜头"等关键词，或描述多个连续场景）
+4. multi_angle_storyboard - 用户想要生成多角度分镜（包含"多角度"、"正视"、"侧视"、"后视"、"俯视"、"四宫格"、"景别"等关键词）
 
 返回 JSON：
 {
-  "workflow_type": "text_to_image | text_to_image_to_video | storyboard",
+  "workflow_type": "text_to_image | text_to_image_to_video | storyboard | multi_angle_storyboard",
   "description": "简短描述",
   
   // text_to_image 和 text_to_image_to_video 使用:
@@ -51,7 +85,12 @@ const INTENT_ANALYSIS_PROMPT = `你是一个工作流分析助手。根据用户
       "title": "分镜标题",
       "prompt": "该分镜的详细画面描述，包含角色动作、场景、光影等"
     }
-  ]
+  ],
+  
+  // multi_angle_storyboard 多角度分镜工作流使用:
+  "multi_angle": {
+    "character_description": "角色的详细外观描述，包括服装、发型、体型、特征等"
+  }
 }
 
 提示词优化要求：
@@ -59,9 +98,11 @@ const INTENT_ANALYSIS_PROMPT = `你是一个工作流分析助手。根据用户
 - video_prompt: 描述画面如何动起来，如镜头移动、主体动作、氛围变化等
 - character.description: 详细描述角色外观特征，便于后续分镜保持一致性
 - shots[].prompt: 每个分镜的完整画面描述，需包含角色名以保持一致性
+- multi_angle.character_description: 详细描述角色外观，用于生成多角度四宫格分镜
 
-示例输入: "蜡笔小新去上学。分镜一：清晨的战争；分镜二：出发的风姿"
-示例输出:
+示例1 - 分镜工作流:
+输入: "蜡笔小新去上学。分镜一：清晨的战争；分镜二：出发的风姿"
+输出:
 {
   "workflow_type": "storyboard",
   "description": "蜡笔小新上学分镜",
@@ -73,6 +114,17 @@ const INTENT_ANALYSIS_PROMPT = `你是一个工作流分析助手。根据用户
     {"title": "清晨的战争", "prompt": "蜡笔小新在卧室赖床，妈妈美伢在旁边生气催促..."},
     {"title": "出发的风姿", "prompt": "蜡笔小新背着黄色书包，在阳光下昂首阔步走出家门..."}
   ]
+}
+
+示例2 - 多角度分镜工作流:
+输入: "生成一个穿红裙子的女孩的多角度分镜"
+输出:
+{
+  "workflow_type": "multi_angle_storyboard",
+  "description": "红裙女孩多角度分镜",
+  "multi_angle": {
+    "character_description": "年轻女孩，长发飘逸，穿着优雅的红色连衣裙，白皙皮肤，精致五官，现代时尚风格"
+  }
 }
 
 返回纯 JSON，不要其他内容。`
@@ -498,6 +550,112 @@ export const useWorkflowOrchestrator = () => {
   }
   
   /**
+   * Execute multi-angle storyboard workflow | 执行多角度分镜工作流
+   * 
+   * 布局结构:
+   * [主角色图] ──┬──> [正视提示词] → [imageConfig] → [正视四宫格]
+   *              ├──> [侧视提示词] → [imageConfig] → [侧视四宫格]
+   *              ├──> [后视提示词] → [imageConfig] → [后视四宫格]
+   *              └──> [俯视提示词] → [imageConfig] → [俯视四宫格]
+   * 
+   * @param {object} multiAngle - 多角度参数 { character_description }
+   * @param {object} position - 起始位置
+   */
+  const executeMultiAngleStoryboard = async (multiAngle, position) => {
+    const nodeSpacing = 400
+    const rowSpacing = 300
+    let x = position.x
+    let y = position.y
+    
+    const characterDesc = multiAngle?.character_description || ''
+    const angles = ['front', 'side', 'back', 'top']
+    
+    addLog('info', `开始执行多角度分镜工作流: ${characterDesc.slice(0, 30)}...`)
+    currentStep.value = 1
+    totalSteps.value = 2 + angles.length * 2 // 角色图 + 每个角度(提示词+生成)
+    
+    const createdNodes = {
+      characterImageId: null,
+      angles: []
+    }
+    
+    try {
+      // Step 1: Create character image node (user uploads or existing)
+      // 创建角色图节点（用户上传或已有）
+      const characterImageId = addNode('image', { x, y }, {
+        url: '',
+        label: '主角色图（请上传）',
+        isCharacterRef: true
+      })
+      createdNodes.characterImageId = characterImageId
+      addLog('info', `创建主角色图节点: ${characterImageId}`)
+      
+      // Step 2: Create 4 angle nodes in parallel layout
+      // 创建4个角度的节点（并行布局）
+      const angleX = x + nodeSpacing + 100
+      
+      for (let i = 0; i < angles.length; i++) {
+        const angleKey = angles[i]
+        const angleConfig = MULTI_ANGLE_PROMPTS[angleKey]
+        const angleY = y + i * rowSpacing
+        let currentX = angleX
+        
+        currentStep.value = 2 + i * 2
+        
+        // Create angle prompt text node | 创建角度提示词节点
+        const promptContent = angleConfig.prompt(characterDesc)
+        const textNodeId = addNode('text', { x: currentX, y: angleY }, {
+          content: promptContent,
+          label: `${angleConfig.label}提示词`
+        })
+        addLog('info', `创建${angleConfig.label}提示词节点: ${textNodeId}`)
+        currentX += nodeSpacing
+        
+        // Create imageConfig node | 创建图片配置节点
+        currentStep.value = 3 + i * 2
+        const configNodeId = addNode('imageConfig', { x: currentX, y: angleY }, {
+          label: `${angleConfig.label} (${angleConfig.english})`,
+          autoExecute: false // 不自动执行，等待用户上传角色图
+        })
+        addLog('info', `创建${angleConfig.label}配置节点: ${configNodeId}`)
+        
+        // Connect text → imageConfig
+        addEdge({
+          source: textNodeId,
+          target: configNodeId,
+          sourceHandle: 'right',
+          targetHandle: 'left'
+        })
+        
+        // Connect character image → imageConfig (as reference)
+        addEdge({
+          source: characterImageId,
+          target: configNodeId,
+          sourceHandle: 'right',
+          targetHandle: 'left'
+        })
+        
+        createdNodes.angles.push({
+          key: angleKey,
+          label: angleConfig.label,
+          english: angleConfig.english,
+          textId: textNodeId,
+          configId: configNodeId,
+          imageId: null
+        })
+      }
+      
+      addLog('success', `多角度分镜工作流已创建，请上传主角色图后点击各节点的"立即生成"按钮`)
+      window.$message?.info('请先上传主角色图，然后点击各角度节点的"立即生成"按钮')
+      
+      return createdNodes
+    } catch (err) {
+      addLog('error', `多角度分镜工作流执行失败: ${err.message}`)
+      throw err
+    }
+  }
+  
+  /**
    * Main execute function based on workflow type
    * 根据工作流类型执行
    * @param {object} params - 工作流参数
@@ -508,10 +666,12 @@ export const useWorkflowOrchestrator = () => {
     clearWatchers()
     executionLog.value = []
     
-    const { workflow_type, image_prompt, video_prompt, character, shots } = params
+    const { workflow_type, image_prompt, video_prompt, character, shots, multi_angle } = params
     
     try {
       switch (workflow_type) {
+        case WORKFLOW_TYPES.MULTI_ANGLE_STORYBOARD:
+          return await executeMultiAngleStoryboard(multi_angle, position)
         case WORKFLOW_TYPES.STORYBOARD:
           return await executeStoryboard(character, shots, position)
         case WORKFLOW_TYPES.TEXT_TO_IMAGE_TO_VIDEO:
@@ -533,6 +693,16 @@ export const useWorkflowOrchestrator = () => {
     return executeWorkflow({ 
       workflow_type: WORKFLOW_TYPES.TEXT_TO_IMAGE, 
       image_prompt: imagePrompt 
+    }, position)
+  }
+  
+  /**
+   * Convenience method for multi-angle storyboard | 多角度分镜简便方法
+   */
+  const createMultiAngleStoryboard = (characterDescription, position) => {
+    return executeWorkflow({
+      workflow_type: WORKFLOW_TYPES.MULTI_ANGLE_STORYBOARD,
+      multi_angle: { character_description: characterDescription }
     }, position)
   }
   
@@ -560,10 +730,12 @@ export const useWorkflowOrchestrator = () => {
     analyzeIntent,
     executeWorkflow,
     createTextToImageWorkflow,
+    createMultiAngleStoryboard,
     reset,
     
     // Constants
-    WORKFLOW_TYPES
+    WORKFLOW_TYPES,
+    MULTI_ANGLE_PROMPTS
   }
 }
 

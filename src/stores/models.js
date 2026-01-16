@@ -9,6 +9,8 @@ import {
   VIDEO_MODELS,
   CHAT_MODELS,
   SEEDREAM_SIZE_OPTIONS,
+  SEEDREAM_4K_SIZE_OPTIONS,
+  SEEDREAM_QUALITY_OPTIONS,
   VIDEO_RATIO_LIST,
   VIDEO_RATIO_OPTIONS,
   VIDEO_DURATION_OPTIONS,
@@ -42,17 +44,32 @@ export const getModelConfig = (modelKey) => {
 
 /**
  * Get size options for image model | 获取图片模型尺寸选项
- * Returns options based on model's sizes array
+ * Returns options based on model's sizes array and quality
  */
-export const getModelSizeOptions = (modelKey) => {
+export const getModelSizeOptions = (modelKey, quality = 'standard') => {
   const model = IMAGE_MODELS.find(m => m.key === modelKey)
+  
+  // If model has getSizesByQuality function, use it | 如果模型有 getSizesByQuality 函数，使用它
+  if (model?.getSizesByQuality) {
+    return model.getSizesByQuality(quality)
+  }
+  
   if (!model?.sizes) return SEEDREAM_SIZE_OPTIONS
   
   // Convert sizes array to dropdown options | 转换 sizes 数组为下拉选项
+  const sizeOptions = quality === '4k' ? SEEDREAM_4K_SIZE_OPTIONS : SEEDREAM_SIZE_OPTIONS
   return model.sizes.map(size => {
-    const option = SEEDREAM_SIZE_OPTIONS.find(o => o.key === size)
+    const option = sizeOptions.find(o => o.key === size)
     return option || { label: size, key: size }
   })
+}
+
+/**
+ * Get quality options for image model | 获取图片模型画质选项
+ */
+export const getModelQualityOptions = (modelKey) => {
+  const model = IMAGE_MODELS.find(m => m.key === modelKey)
+  return model?.qualities || []
 }
 
 /**
@@ -116,7 +133,7 @@ export {
 }
 
 // Export options | 导出选项
-export { SEEDREAM_SIZE_OPTIONS, VIDEO_RATIO_OPTIONS, VIDEO_DURATION_OPTIONS }
+export { SEEDREAM_SIZE_OPTIONS, SEEDREAM_4K_SIZE_OPTIONS, SEEDREAM_QUALITY_OPTIONS, VIDEO_RATIO_OPTIONS, VIDEO_DURATION_OPTIONS }
 
 // Export state | 导出状态
 export { loading, error }

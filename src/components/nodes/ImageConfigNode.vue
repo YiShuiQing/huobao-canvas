@@ -37,6 +37,17 @@
           </n-dropdown>
         </div>
 
+        <!-- Quality selector | 画质选择 -->
+        <div v-if="hasQualityOptions" class="flex items-center justify-between">
+          <span class="text-xs text-[var(--text-secondary)]">画质</span>
+          <n-dropdown :options="qualityOptions" @select="handleQualitySelect">
+            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
+              {{ displayQuality }}
+              <n-icon :size="12"><ChevronForwardOutline /></n-icon>
+            </button>
+          </n-dropdown>
+        </div>
+
         <!-- Size selector | 尺寸选择 -->
         <div v-if="hasSizeOptions" class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">尺寸</span>
@@ -50,8 +61,6 @@
                 </n-icon>
               </button>
             </n-dropdown>
-            <!-- <input v-model="localSize" @blur="updateSize" @mousedown.stop placeholder="自定义尺寸"
-              class="w-24 px-2 py-1 text-xs bg-[var(--bg-tertiary)] border border-[var(--border-color)] rounded outline-none focus:border-[var(--accent-color)] text-[var(--text-primary)]" /> -->
           </div>
         </div>
 
@@ -135,7 +144,7 @@ import { NIcon, NDropdown, NSpin } from 'naive-ui'
 import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline } from '@vicons/ionicons5'
 import { useImageGeneration, useApiConfig } from '../../hooks'
 import { updateNode, addNode, addEdge, nodes, edges, duplicateNode, removeNode } from '../../stores/canvas'
-import { imageModelOptions, getModelSizeOptions, getModelConfig, DEFAULT_IMAGE_MODEL } from '../../stores/models'
+import { imageModelOptions, getModelSizeOptions, getModelQualityOptions, getModelConfig, DEFAULT_IMAGE_MODEL } from '../../stores/models'
 
 const props = defineProps({
   id: String,
@@ -157,6 +166,7 @@ const showActions = ref(false)
 // Local state | 本地状态
 const localModel = ref(props.data?.model || DEFAULT_IMAGE_MODEL)
 const localSize = ref(props.data?.size || '1024x1024')
+const localQuality = ref(props.data?.quality || 'standard')
 
 // Get current model config | 获取当前模型配置
 const currentModelConfig = computed(() => getModelConfig(localModel.value))
@@ -170,9 +180,25 @@ const displayModelName = computed(() => {
   return model?.label || localModel.value || '选择模型'
 })
 
-// Size options based on model | 基于模型的尺寸选项
+// Quality options based on model | 基于模型的画质选项
+const qualityOptions = computed(() => {
+  return getModelQualityOptions(localModel.value)
+})
+
+// Check if model has quality options | 检查模型是否有画质选项
+const hasQualityOptions = computed(() => {
+  return qualityOptions.value && qualityOptions.value.length > 0
+})
+
+// Display quality | 显示画质
+const displayQuality = computed(() => {
+  const option = qualityOptions.value.find(o => o.key === localQuality.value)
+  return option?.label || '标准画质'
+})
+
+// Size options based on model and quality | 基于模型和画质的尺寸选项
 const sizeOptions = computed(() => {
-  return getModelSizeOptions(localModel.value)
+  return getModelSizeOptions(localModel.value, localQuality.value)
 })
 
 // Check if model has size options | 检查模型是否有尺寸选项
@@ -233,13 +259,31 @@ const connectedRefImages = computed(() => {
 // Handle model selection | 处理模型选择
 const handleModelSelect = (key) => {
   localModel.value = key
-  // Update size to model's default | 更新为模型默认尺寸
+  // Update size and quality to model's default | 更新为模型默认尺寸和画质
   const config = getModelConfig(key)
+  const updates = { model: key }
   if (config?.defaultParams?.size) {
     localSize.value = config.defaultParams.size
-    updateNode(props.id, { model: key, size: config.defaultParams.size })
+    updates.size = config.defaultParams.size
+  }
+  if (config?.defaultParams?.quality) {
+    localQuality.value = config.defaultParams.quality
+    updates.quality = config.defaultParams.quality
+  }
+  updateNode(props.id, updates)
+}
+
+// Handle quality selection | 处理画质选择
+const handleQualitySelect = (quality) => {
+  localQuality.value = quality
+  // Update size to first option of new quality | 更新尺寸为新画质的第一个选项
+  const newSizeOptions = getModelSizeOptions(localModel.value, quality)
+  if (newSizeOptions.length > 0) {
+    const defaultSize = quality === '4k' ? newSizeOptions.find(o => o.key.includes('4096'))?.key || newSizeOptions[4]?.key : newSizeOptions[4]?.key
+    localSize.value = defaultSize || newSizeOptions[0].key
+    updateNode(props.id, { quality, size: localSize.value })
   } else {
-    updateNode(props.id, { model: key })
+    updateNode(props.id, { quality })
   }
 }
 
@@ -257,6 +301,21 @@ const updateSize = () => {
 // Created image node ID | 创建的图片节点 ID
 const createdImageNodeId = ref(null)
 
+// Find connected output image node (empty image node) | 查找已连接的输出图片节点（空白图片节点）
+const findConnectedOutputImageNode = () => {
+  // Find edges where this node is the source | 查找以当前节点为源的边
+  const outputEdges = edges.value.filter(e => e.source === props.id)
+  
+  for (const edge of outputEdges) {
+    const targetNode = nodes.value.find(n => n.id === edge.target)
+    // Check if target is an image node with empty or no url | 检查目标是否为空白图片节点
+    if (targetNode?.type === 'image' && (!targetNode.data?.url || targetNode.data?.url === '')) {
+      return targetNode.id
+    }
+  }
+  return null
+}
+
 // Handle generate action | 处理生成操作
 const handleGenerate = async () => {
   const { prompt, refImages } = getConnectedInputs()
@@ -271,26 +330,35 @@ const handleGenerate = async () => {
     return
   }
 
-  // Get current node position | 获取当前节点位置
-  const currentNode = nodes.value.find(n => n.id === props.id)
-  const nodeX = currentNode?.position?.x || 0
-  const nodeY = currentNode?.position?.y || 0
+  // Check for existing connected empty image node | 检查是否已有连接的空白图片节点
+  let imageNodeId = findConnectedOutputImageNode()
+  
+  if (imageNodeId) {
+    // Use existing empty image node | 使用已有的空白图片节点
+    updateNode(imageNodeId, { loading: true })
+  } else {
+    // Get current node position | 获取当前节点位置
+    const currentNode = nodes.value.find(n => n.id === props.id)
+    const nodeX = currentNode?.position?.x || 0
+    const nodeY = currentNode?.position?.y || 0
 
-  // Create image node with loading state | 创建带加载状态的图片节点
-  const imageNodeId = addNode('image', { x: nodeX + 400, y: nodeY }, {
-    url: '',
-    loading: true,
-    label: '图像生成结果'
-  })
+    // Create image node with loading state | 创建带加载状态的图片节点
+    imageNodeId = addNode('image', { x: nodeX + 400, y: nodeY }, {
+      url: '',
+      loading: true,
+      label: '图像生成结果'
+    })
+
+    // Auto-connect imageConfig → image | 自动连接 生图配置 → 图片
+    addEdge({
+      source: props.id,
+      target: imageNodeId,
+      sourceHandle: 'right',
+      targetHandle: 'left'
+    })
+  }
+  
   createdImageNodeId.value = imageNodeId
-
-  // Auto-connect imageConfig → image | 自动连接 生图配置 → 图片
-  addEdge({
-    source: props.id,
-    target: imageNodeId,
-    sourceHandle: 'right',
-    targetHandle: 'left'
-  })
 
   // Force Vue Flow to recalculate node dimensions | 强制 Vue Flow 重新计算节点尺寸
   setTimeout(() => {
@@ -303,6 +371,7 @@ const handleGenerate = async () => {
       model: localModel.value,
       prompt: prompt,
       size: localSize.value,
+      quality: localQuality.value,
       n: 1
     }
 
@@ -364,7 +433,6 @@ watch(
       updateNode(props.id, { autoExecute: false })
       // Delay to ensure node connections are established | 延迟确保节点连接已建立
       setTimeout(() => {
-        debugger
         handleGenerate()
       }, 100)
     }

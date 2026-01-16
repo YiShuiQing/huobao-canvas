@@ -101,7 +101,7 @@ const getDefaultNodeData = (type) => {
         prompt: '',
         ratio: '16:9',
         duration: '5秒',
-        model: 'doubao-seedance-1-5-pro_480p',
+        model: 'doubao-seedance-1-5-pro_720p',
         label: '图生视频'
       }
     case 'video':

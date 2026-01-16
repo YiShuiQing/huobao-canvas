@@ -337,7 +337,6 @@ const clearMask = () => {
 
 // Apply inpaint and create workflow | 应用重绘并创建工作流
 const applyInpaint = () => {
-  debugger
   const canvas = canvasRef.value
   if (!canvas || canvas.width === 0 || canvas.height === 0) {
     window.$message?.error('画布未初始化')
