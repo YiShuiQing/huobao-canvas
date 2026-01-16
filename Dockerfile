@@ -39,11 +39,11 @@ RUN chown -R nginx:nginx /usr/share/nginx/html && \
 # 切换到非 root 用户
 USER nginx
 
-# 暴露端口 8080
-EXPOSE 8080
+# 暴露端口 80
+EXPOSE 80
 
 # 添加健康检查
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget -q -O - http://127.0.0.1:8080/health || exit 1
+  CMD wget -q -O - http://127.0.0.1:80/health || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["sh", "-c", "echo '================== huobao-canvas ==================' && echo 'AI Canvas 可视化 AI 创作画布服务启动中...' && echo '访问地址: http://0.0.0.0:80/huobao-canvas' && nginx -g 'daemon off;'"]
