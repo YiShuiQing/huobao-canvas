@@ -248,7 +248,6 @@ export const getModelConfig = (modelKey) => {
 }
 
 /**
-/**
  * Get size options for image model | 获取图片模型尺寸选项
  * Returns options based on model's sizes array and quality
  */
