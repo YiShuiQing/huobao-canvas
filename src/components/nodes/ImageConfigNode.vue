@@ -216,7 +216,6 @@ const sizeOptions = computed(() => {
 const supportsSizeParam = computed(() => {
   return sizeOptions.value && sizeOptions.value.length > 0
 })
-})
 
 // Check if model has size options | 检查模型是否有尺寸选项
 const hasSizeOptions = computed(() => {
