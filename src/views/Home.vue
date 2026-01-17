@@ -257,7 +257,6 @@ const isApiConfigured = ref(apiConfig.isConfigured.value)
 
 // Refresh API config state | 刷新 API 配置状态
 const refreshApiConfig = () => {
-  debugger
   isApiConfigured.value = !!localStorage.getItem('apiKey')
 }
 
@@ -375,7 +374,7 @@ const confirmRename = () => {
 
 // Check API key before navigation | 跳转前检查 API Key
 const checkApiKeyAndNavigate = (callback) => {
-  debugger
+  
   if (!isApiConfigured.value) {
     dialog.warning({
       title: '未配置 API Key',

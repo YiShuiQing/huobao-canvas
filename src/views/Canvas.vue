@@ -28,6 +28,14 @@
           </n-icon>
         </button>
         <button 
+          @click="showDownloadModal = true"
+          class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
+          :class="{ 'text-[var(--accent-color)]': hasDownloadableAssets }"
+          title="批量下载素材"
+        >
+          <n-icon :size="20"><DownloadOutline /></n-icon>
+        </button>
+        <button 
           @click="showApiSettings = true"
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
           :class="{ 'text-[var(--accent-color)]': isApiConfigured }"
@@ -82,6 +90,13 @@
           title="添加节点"
         >
           <n-icon :size="20"><AddOutline /></n-icon>
+        </button>
+        <button 
+          @click="showWorkflowPanel = true"
+          class="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-[var(--bg-tertiary)] transition-colors"
+          title="工作流模板"
+        >
+          <n-icon :size="20"><AppsOutline /></n-icon>
         </button>
         <div class="w-full h-px bg-[var(--border-color)] my-1"></div>
         <button 
@@ -232,6 +247,12 @@
         <n-button type="error" @click="confirmDelete">删除</n-button>
       </template>
     </n-modal>
+
+    <!-- Download Modal | 下载弹窗 -->
+    <DownloadModal v-model:show="showDownloadModal" />
+
+    <!-- Workflow Panel | 工作流面板 -->
+    <WorkflowPanel v-model:show="showWorkflowPanel" @add-workflow="handleAddWorkflow" />
   </div>
 </template>
 
@@ -264,7 +285,9 @@ import {
   ArrowRedoOutline,
   GridOutline,
   LocateOutline,
-  RemoveOutline
+  RemoveOutline,
+  DownloadOutline,
+  AppsOutline
 } from '@vicons/ionicons5'
 import { isDark, toggleTheme } from '../stores/theme'
 import { nodes, edges, addNode, addEdge, updateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory } from '../stores/canvas'
@@ -274,6 +297,8 @@ import { projects, initProjectsStore, updateProject, renameProject, currentProje
 
 // API Settings component | API 设置组件
 import ApiSettings from '../components/ApiSettings.vue'
+import DownloadModal from '../components/DownloadModal.vue'
+import WorkflowPanel from '../components/WorkflowPanel.vue'
 
 // API Config hook | API 配置 hook
 const { isConfigured: isApiConfigured } = useApiConfig()
@@ -321,6 +346,7 @@ const {
   analyzeIntent,
   executeWorkflow,
   createTextToImageWorkflow,
+  createMultiAngleStoryboard,
   WORKFLOW_TYPES
 } = useWorkflowOrchestrator()
 
@@ -367,7 +393,17 @@ const flowKey = ref(Date.now())
 // Modal state | 弹窗状态
 const showRenameModal = ref(false)
 const showDeleteModal = ref(false)
+const showDownloadModal = ref(false)
+const showWorkflowPanel = ref(false)
 const renameValue = ref('')
+
+// Check if has downloadable assets | 检查是否有可下载素材
+const hasDownloadableAssets = computed(() => {
+  return nodes.value.some(n => 
+    (n.type === 'image' || n.type === 'video') && n.data?.url
+  )
+})
+
 
 // Project info | 项目信息
 const projectName = computed(() => {
@@ -407,7 +443,7 @@ const inputPlaceholder = '你可以试着说"帮我生成一个二次元的卡�
 const suggestions = [
   '像个魔法森林',
   '三只不同的小猫',
-  '流动金属动态背景',
+  '生成多角度分镜',
   '夏日田野环绕漫步'
 ]
 
@@ -430,6 +466,49 @@ const addNewNode = async (type) => {
   }, 50)
   
   showNodeMenu.value = false
+}
+
+// Handle add workflow from panel | 处理从面板添加工作流
+const handleAddWorkflow = ({ workflow, options }) => {
+  // Calculate viewport center position | 计算视口中心位置
+  const viewportCenterX = -viewport.value.x / viewport.value.zoom + (window.innerWidth / 2) / viewport.value.zoom
+  const viewportCenterY = -viewport.value.y / viewport.value.zoom + (window.innerHeight / 2) / viewport.value.zoom
+  
+  // Create nodes from workflow template | 从工作流模板创建节点
+  const startPosition = { x: viewportCenterX - 300, y: viewportCenterY - 200 }
+  const { nodes: newNodes, edges: newEdges } = workflow.createNodes(startPosition, options)
+  
+  // Add nodes to canvas | 将节点添加到画布
+  newNodes.forEach(node => {
+    const nodeId = addNode(node.type, node.position, node.data)
+    // Update the node ID in edges | 更新边中的节点ID
+    newEdges.forEach(edge => {
+      if (edge.source === node.id) edge.source = nodeId
+      if (edge.target === node.id) edge.target = nodeId
+    })
+    node.newId = nodeId
+  })
+  
+  // Add edges to canvas | 将边添加到画布
+  setTimeout(() => {
+    newEdges.forEach(edge => {
+      addEdge({
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle || 'right',
+        targetHandle: edge.targetHandle || 'left'
+      })
+    })
+    
+    // Update node internals | 更新节点内部
+    newNodes.forEach(node => {
+      if (node.newId) {
+        updateNodeInternals(node.newId)
+      }
+    })
+  }, 100)
+  
+  window.$message?.success(`已添加工作流: ${workflow.name}`)
 }
 
 // Handle connection | 处理连接

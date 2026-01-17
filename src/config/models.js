@@ -5,33 +5,44 @@
 
 // Seedream image size options | 豆包图片尺寸选项
 export const SEEDREAM_SIZE_OPTIONS = [
-    { label: '21:9 (3024x1296)', key: '3024x1296' },
-    { label: '16:9 (2560x1440)', key: '2560x1440' },
-    { label: '4:3 (2304x1728)', key: '2304x1728' },
-    { label: '3:2 (2496x1664)', key: '2496x1664' },
-    { label: '1:1 (2048x2048)', key: '2048x2048' },
-    { label: '2:3 (1664x2496)', key: '1664x2496' },
-    { label: '3:4 (1728x2304)', key: '1728x2304' },
-    { label: '9:16 (1440x2560)', key: '1440x2560' },
-    { label: '9:21 (1296x3024)', key: '1296x3024' }
+    { label: '21:9', key: '3024x1296' },
+    { label: '16:9', key: '2560x1440' },
+    { label: '4:3', key: '2304x1728' },
+    { label: '3:2', key: '2496x1664' },
+    { label: '1:1', key: '2048x2048' },
+    { label: '2:3', key: '1664x2496' },
+    { label: '3:4', key: '1728x2304' },
+    { label: '9:16', key: '1440x2560' },
+    { label: '9:21', key: '1296x3024' }
+]
+
+// Seedream 4K image size options | 豆包4K图片尺寸选项
+export const SEEDREAM_4K_SIZE_OPTIONS = [
+    { label: '21:9', key: '6198x2656' },
+    { label: '16:9', key: '5404x3040' },
+    { label: '4:3', key: '4694x3520' },
+    { label: '3:2', key: '4992x3328' },
+    { label: '1:1', key: '4096x4096' },
+    { label: '2:3', key: '3328x4992' },
+    { label: '3:4', key: '3520x4694' },
+    { label: '9:16', key: '3040x5404' },
+    { label: '9:21', key: '2656x6198' }
+]
+
+// Seedream quality options | 豆包画质选项
+export const SEEDREAM_QUALITY_OPTIONS = [
+    { label: '标准画质', key: 'standard' },
+    { label: '4K 高清', key: '4k' }
 ]
 
 // Image generation models | 图片生成模型
 export const IMAGE_MODELS = [
     {
-        label: '豆包 Seedream 4.5 (免费)',
-        key: 'free/doubao-seedream-4.5',
-        sizes: SEEDREAM_SIZE_OPTIONS.map(s => s.key),
-        defaultParams: {
-            size: '2048x2048',
-            quality: 'standard',
-            style: 'vivid'
-        }
-    },
-    {
         label: '豆包 Seedream 4.5',
         key: 'doubao-seedream-4-5-251128',
         sizes: SEEDREAM_SIZE_OPTIONS.map(s => s.key),
+        qualities: SEEDREAM_QUALITY_OPTIONS,
+        getSizesByQuality: (quality) => quality === '4k' ? SEEDREAM_4K_SIZE_OPTIONS : SEEDREAM_SIZE_OPTIONS,
         defaultParams: {
             size: '2048x2048',
             quality: 'standard',
@@ -51,9 +62,11 @@ export const IMAGE_MODELS = [
     {
         label: 'Nano Banana Pro',
         key: 'nano-banana-pro',
-        tips: '尺寸写在提示词中: 尺寸 9:16',
-        sizes: [],
+        sizes: SEEDREAM_SIZE_OPTIONS.map(s => s.key),
+        // qualities: SEEDREAM_QUALITY_OPTIONS,
+        // getSizesByQuality: (quality) => quality === '4k' ? SEEDREAM_4K_SIZE_OPTIONS : SEEDREAM_SIZE_OPTIONS,
         defaultParams: {
+            size: '2048x2048',
             quality: 'standard',
             style: 'vivid'
         }
@@ -71,13 +84,6 @@ export const VIDEO_RATIO_LIST = [
 
 // Video generation models | 视频生成模型
 export const VIDEO_MODELS = [
-    {
-        label: '豆包视频 480P (免费)',
-        key: 'free/doubao-seedance-1-5-pro_480p',
-        ratios: VIDEO_RATIO_LIST.map(s => s.key),
-        durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
-        defaultParams: { ratio: '16:9', duration: 5 }
-    },
     {
         label: '豆包视频 720P',
         key: 'doubao-seedance-1-5-pro_720p',
@@ -138,10 +144,10 @@ export const VIDEO_DURATION_OPTIONS = [
 ]
 
 // Default values | 默认值
-export const DEFAULT_IMAGE_MODEL = 'free/doubao-seedream-4.5'
-export const DEFAULT_VIDEO_MODEL = 'free/doubao-seedance-1-5-pro_480p'
+export const DEFAULT_IMAGE_MODEL = 'doubao-seedream-4-5-251128'
+export const DEFAULT_VIDEO_MODEL = 'doubao-seedance-1-5-pro_720p'
 export const DEFAULT_CHAT_MODEL = 'gpt-4o-mini'
-export const DEFAULT_IMAGE_SIZE = '1024x1024'
+export const DEFAULT_IMAGE_SIZE = '2048x2048'
 export const DEFAULT_VIDEO_RATIO = '16:9'
 export const DEFAULT_VIDEO_DURATION = 5
 
