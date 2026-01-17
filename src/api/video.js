@@ -3,24 +3,29 @@
  */
 
 import { request } from '@/utils'
+import { getEndpoint } from '@/hooks/useApiConfig'
 
 // 创建视频任务
 export const createVideoTask = (data, options = {}) => {
-  const { endpoint = '/videos' } = options
+  const { requestType = 'json', endpoint = getEndpoint('video') } = options
   return request({
     url: endpoint,
     method: 'post',
     data,
-    headers: { 'Content-Type': 'multipart/form-data' }
+    headers: requestType === 'formdata' ? { 'Content-Type': 'multipart/form-data' } : {}
   })
 }
 
 // 查询视频任务状态
-export const getVideoTaskStatus = (taskId) =>
-  request({
-    url: `/videos/${taskId}`,
+export const getVideoTaskStatus = (taskId) => {
+  const endpointTemplate = getEndpoint('videoStatus')
+  const url = endpointTemplate.replace('{taskId}', taskId)
+  
+  return request({
+    url,
     method: 'get'
   })
+}
 
 // 轮询视频任务直到完成
 export const pollVideoTask = async (taskId, maxAttempts = 120, interval = 5000) => {

@@ -10,6 +10,7 @@
 
 import { ref, watch } from 'vue'
 import { streamChatCompletions } from '@/api'
+import { useApiConfig } from './useApiConfig'
 import { 
   nodes, 
   addNode, 
@@ -133,6 +134,9 @@ const INTENT_ANALYSIS_PROMPT = `你是一个工作流分析助手。根据用户
  * Workflow Orchestrator Composable
  */
 export const useWorkflowOrchestrator = () => {
+  // API Config
+  const { selectedModel, availableModels, provider } = useApiConfig()
+
   // State | 状态
   const isAnalyzing = ref(false)
   const isExecuting = ref(false)
@@ -265,7 +269,7 @@ export const useWorkflowOrchestrator = () => {
     try {
       let response = ''
       for await (const chunk of streamChatCompletions({
-        model: 'gpt-4o',
+        model: selectedModel.value,
         messages: [
           { role: 'system', content: INTENT_ANALYSIS_PROMPT },
           { role: 'user', content: userInput }

@@ -10,7 +10,7 @@ import {
   getVideoTaskStatus,
   streamChatCompletions
 } from '@/api'
-import { getModelByName } from '@/config/models'
+import { getModelConfig } from '@/stores/models'
 import { useApiConfig } from './useApiConfig'
 
 /**
@@ -57,7 +57,7 @@ export const useChat = (options = {}) => {
   const currentResponse = ref('')
   let abortController = null
 
-  const send = async (content, stream = true) => {
+  const send = async (content, stream = true, extraOptions = {}) => {
     setLoading(true)
     currentResponse.value = ''
 
@@ -74,7 +74,7 @@ export const useChat = (options = {}) => {
         let fullResponse = ''
 
         for await (const chunk of streamChatCompletions(
-          { model: options.model || 'gpt-4o-mini', messages: msgList },
+          { model: extraOptions.model || options.model || 'gpt-4o-mini', messages: msgList },
           abortController.signal
         )) {
           fullResponse += chunk
@@ -132,14 +132,16 @@ export const useImageGeneration = () => {
     currentImage.value = null
 
     try {
-      const modelConfig = getModelByName(params.model)
-      
-      // Build request data | 构建请求数据
+      const modelConfig = getModelConfig(params.model)
+      const supportsSizeParam = !!(modelConfig?.defaultParams?.size || (Array.isArray(modelConfig?.sizes) && modelConfig.sizes.length > 0))
+
       const requestData = {
         model: params.model,
-        prompt: params.prompt,
-        size: params.size || modelConfig?.defaultParams?.size || '1024x1024',
-        // n: params.n || 1
+        prompt: params.prompt
+      }
+
+      if (supportsSizeParam) {
+        requestData.size = params.size || modelConfig?.defaultParams?.size || '1024x1024'
       }
 
       // Add reference image if provided | 添加参考图
@@ -165,8 +167,15 @@ export const useImageGeneration = () => {
       setSuccess()
       return generatedImages
     } catch (err) {
-      setError(err)
-      throw err
+      const httpStatus = err?.response?.status
+      const serverMessage = err?.response?.data?.error?.message || err?.response?.data?.message
+      const message = serverMessage || err?.message || '生成失败'
+      const friendly = httpStatus === 400 ? `请求参数不合法: ${message}` : message
+      const e = new Error(friendly)
+      e.httpStatus = httpStatus
+      e.data = err?.response?.data
+      setError(e)
+      throw e
     }
   }
 
@@ -179,6 +188,7 @@ export const useImageGeneration = () => {
  */
 export const useVideoGeneration = () => {
   const { loading, error, status, reset, setLoading, setError, setSuccess } = useApiState()
+  const { provider } = useApiConfig()
 
   const video = ref(null)
   const taskId = ref(null)
@@ -200,24 +210,64 @@ export const useVideoGeneration = () => {
     progress.percentage = 0
 
     try {
-      const modelConfig = getModelByName(params.model)
+      const modelConfig = getModelConfig(params.model)
+      console.log('[useVideoGeneration] input params', params)
+      console.log('[useVideoGeneration] model config', { model: params.model, hasConfig: !!modelConfig })
       
       // Build request data | 构建请求数据
-      const requestData = {
+      let requestData = {
         model: params.model,
         prompt: params.prompt || ''
       }
-      // Add optional params | 添加可选参数
-      if (params.first_frame_image) requestData.first_frame_image = params.first_frame_image
-      if (params.last_frame_image) requestData.last_frame_image = params.last_frame_image
-      if (params.ratio) requestData.size = params.ratio
-      if (params.dur) requestData.seconds = params.dur
+      
+      // Adapt payload for Volc Engine | 适配火山引擎请求结构
+      if (provider.value === 'volc_engine') {
+        const content = []
+        // Add text prompt | 添加文本提示词
+        if (params.prompt) {
+          content.push({ type: 'text', text: params.prompt })
+        }
+        // Add first frame image | 添加首帧图片
+        if (params.first_frame_image) {
+          content.push({ 
+            type: 'image_url', 
+            image_url: { url: params.first_frame_image } 
+          })
+        }
+        // Add last frame image | 添加尾帧图片
+        if (params.last_frame_image) {
+           content.push({ 
+            type: 'image_url', 
+            image_url: { url: params.last_frame_image } 
+          })
+        }
+
+        requestData = {
+          model: params.model,
+          content,
+          generate_audio: true,
+          ratio: params.ratio || 'adaptive',
+          duration: params.dur || 5,
+          watermark: false
+        }
+      } else {
+        // Standard/Default payload structure | 标准/默认请求结构
+        // Add optional params | 添加可选参数
+        if (params.first_frame_image) requestData.first_frame_image = params.first_frame_image
+        if (params.last_frame_image) requestData.last_frame_image = params.last_frame_image
+        if (params.ratio) requestData.size = params.ratio
+        if (params.dur) requestData.seconds = params.dur
+      }
+
+      console.log('[useVideoGeneration] request data', requestData)
 
       // Call API | 调用 API
       const task = await createVideoTask(requestData, {
         requestType: 'json',
-        endpoint: modelConfig?.endpoint || '/videos'
+        endpoint: modelConfig?.endpoint
       })
+
+      console.log('[useVideoGeneration] task response', task)
 
       // Check if async (need polling) | 检查是否异步
       const isAsync = modelConfig?.async !== false
@@ -252,7 +302,7 @@ export const useVideoGeneration = () => {
         // Check for completion | 检查是否完成
         if (result.status === 'completed' || result.status === 'succeeded' || result.data) {
           progress.percentage = 100
-          const videoUrl = result.data?.url || result.data?.[0]?.url || result.url || result.video_url
+          const videoUrl = result.content?.video_url || result.data?.url || result.data?.[0]?.url || result.url || result.video_url
           video.value = { url: videoUrl, ...result }
           setSuccess()
           return video.value

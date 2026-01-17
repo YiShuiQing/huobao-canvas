@@ -31,7 +31,9 @@
 
         <!-- Aspect ratio selector | 宽高比选择 -->
         <div class="flex items-center justify-between">
-          <span class="text-xs text-[var(--text-secondary)]">比例</span>
+          <span class="text-xs text-[var(--text-secondary)]">
+            比例 <span v-if="ratioWarning" class="text-orange-500 text-[10px]">⚠️</span>
+          </span>
           <n-dropdown :options="ratioOptions" @select="handleRatioSelect">
             <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
               {{ localRatio }}
@@ -44,7 +46,9 @@
 
         <!-- Duration selector | 时长选择 -->
         <div class="flex items-center justify-between">
-          <span class="text-xs text-[var(--text-secondary)]">时长</span>
+          <span class="text-xs text-[var(--text-secondary)]">
+             时长 <span v-if="durationWarning" class="text-orange-500 text-[10px]">⚠️</span>
+          </span>
           <n-dropdown :options="durationOptions" @select="handleDurationSelect">
             <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
               {{ localDuration }}s
@@ -142,7 +146,7 @@ import { NIcon, NDropdown, NSpin } from 'naive-ui'
 import { ChevronForwardOutline, ChevronDownOutline, TrashOutline, VideocamOutline, CopyOutline } from '@vicons/ionicons5'
 import { useVideoGeneration, useApiConfig } from '../../hooks'
 import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
-import { videoModelOptions, getModelRatioOptions, getModelDurationOptions, getModelConfig, DEFAULT_VIDEO_MODEL } from '../../stores/models'
+import { imageToVideoOptions, getModelRatioOptions, getModelDurationOptions, getModelConfig, DEFAULT_VIDEO_MODEL } from '../../stores/models'
 
 const props = defineProps({
   id: String,
@@ -204,12 +208,32 @@ const imagesByRole = computed(() => {
 const currentModelConfig = computed(() => getModelConfig(localModel.value))
 
 // Model options from store | 从 store 获取模型选项
-const modelOptions = videoModelOptions
+const modelOptions = computed(() => imageToVideoOptions.value.map(m => ({ label: m.label, key: m.key })))
 
 // Display model name | 显示模型名称
 const displayModelName = computed(() => {
   const model = modelOptions.value.find(m => m.key === localModel.value)
   return model?.label || localModel.value || '选择模型'
+})
+
+// Ratio warning
+const ratioWarning = computed(() => {
+  const config = currentModelConfig.value
+  if (config?.ratios && !config.ratios.includes(localRatio.value)) {
+    return '不支持此比例'
+  }
+  return null
+})
+
+// Duration warning
+const durationWarning = computed(() => {
+  const config = currentModelConfig.value
+  if (config?.durs) {
+      // durs is object array {label, key}
+      const supported = config.durs.map(d => d.key)
+      if (!supported.includes(localDuration.value)) return '不支持此时长'
+  }
+  return null
 })
 
 // Ratio options based on model | 基于模型的比例选项
@@ -224,6 +248,7 @@ const durationOptions = computed(() => {
 
 // Handle model selection | 处理模型选择
 const handleModelSelect = (key) => {
+  console.log('[VideoConfigNode] model selected', { nodeId: props.id, key, prev: localModel.value })
   localModel.value = key
   // Update ratio and duration to model's default | 更新为模型默认比例和时长
   const config = getModelConfig(key)
@@ -317,6 +342,11 @@ const handleGenerate = async () => {
     return
   }
 
+  if (ratioWarning.value || durationWarning.value) {
+    window.$message?.error('参数错误: ' + (ratioWarning.value || durationWarning.value))
+    return
+  }
+
   // Get current node position | 获取当前节点位置
   const currentNode = nodes.value.find(n => n.id === props.id)
   const nodeX = currentNode?.position?.x || 0
@@ -380,7 +410,11 @@ const handleGenerate = async () => {
       params.dur = localDuration.value
     }
 
+    console.log('[VideoConfigNode] generate params', { nodeId: props.id, params })
+
     const result = await generate(params)
+
+    console.log('[VideoConfigNode] generate result', { nodeId: props.id, hasUrl: !!result?.url })
 
     // Update video node with generated URL | 更新视频节点 URL
     if (result && result.url) {

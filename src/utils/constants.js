@@ -6,6 +6,13 @@
 export const DEFAULT_API_BASE_URL = 'https://api.chatfire.site/v1'
 
 // API Endpoints | API 端点
+export const DEFAULT_ENDPOINTS = {
+  chat: '/chat/completions',
+  image: '/images/generations',
+  video: '/videos',
+  videoStatus: '/videos/{taskId}'
+}
+
 export const API_ENDPOINTS = {
   // Model | 模型
   MODEL_PAGE: '/model/page',
@@ -49,5 +56,7 @@ export const DEFAULT_CHAT_CONFIG = {
 // Local Storage Keys | 本地存储键
 export const STORAGE_KEYS = {
   API_KEY: 'apiKey',
-  BASE_URL: 'apiBaseUrl'
+  BASE_URL: 'apiBaseUrl',
+  PROVIDER: 'apiProvider',
+  ENDPOINTS: 'apiEndpoints'
 }

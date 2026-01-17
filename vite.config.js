@@ -16,6 +16,11 @@ export default defineConfig({
       '/v1': {
         target: 'https://api.chatfire.site',
         changeOrigin: true
+      },
+      '/volc-api': {
+        target: 'https://ark.cn-beijing.volces.com/api/v3',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/volc-api/, '')
       }
     }
   }

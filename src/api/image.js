@@ -3,10 +3,11 @@
  */
 
 import { request } from '@/utils'
+import { getEndpoint } from '@/hooks/useApiConfig'
 
 // 生成图片
 export const generateImage = (data, options = {}) => {
-  const { requestType = 'json', endpoint = '/images/generations' } = options
+  const { requestType = 'json', endpoint = getEndpoint('image') } = options
   
   return request({
     url: endpoint,

@@ -64,6 +64,11 @@
           </div>
         </div>
 
+        <!-- Size Warning -->
+        <div v-if="sizeWarning" class="text-xs text-orange-500 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded">
+           ⚠️ {{ sizeWarning }}
+        </div>
+
         <!-- Model tips | 模型提示 -->
         <div v-if="currentModelConfig?.tips" class="text-xs text-[var(--text-tertiary)] bg-[var(--bg-tertiary)] rounded px-2 py-1">
           💡 {{ currentModelConfig.tips }}
@@ -144,7 +149,7 @@ import { NIcon, NDropdown, NSpin } from 'naive-ui'
 import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline } from '@vicons/ionicons5'
 import { useImageGeneration, useApiConfig } from '../../hooks'
 import { updateNode, addNode, addEdge, nodes, edges, duplicateNode, removeNode } from '../../stores/canvas'
-import { imageModelOptions, getModelSizeOptions, getModelQualityOptions, getModelConfig, DEFAULT_IMAGE_MODEL } from '../../stores/models'
+import { getModelSizeOptions, getModelQualityOptions, getModelConfig, DEFAULT_IMAGE_MODEL, textToImageOptions, imageToImageOptions } from '../../stores/models'
 
 const props = defineProps({
   id: String,
@@ -172,7 +177,14 @@ const localQuality = ref(props.data?.quality || 'standard')
 const currentModelConfig = computed(() => getModelConfig(localModel.value))
 
 // Model options from store | 从 store 获取模型选项
-const modelOptions = imageModelOptions
+const modelOptions = computed(() => {
+  // If input image is connected, show Image-to-Image models
+  if (connectedRefImages.value.length > 0) {
+    return imageToImageOptions.value.map(m => ({ label: m.label, key: m.key }))
+  }
+  // Default to Text-to-Image
+  return textToImageOptions.value.map(m => ({ label: m.label, key: m.key }))
+})
 
 // Display model name | 显示模型名称
 const displayModelName = computed(() => {
@@ -201,16 +213,31 @@ const sizeOptions = computed(() => {
   return getModelSizeOptions(localModel.value, localQuality.value)
 })
 
+const supportsSizeParam = computed(() => {
+  return sizeOptions.value && sizeOptions.value.length > 0
+})
+})
+
 // Check if model has size options | 检查模型是否有尺寸选项
 const hasSizeOptions = computed(() => {
-  const config = getModelConfig(localModel.value)
-  return config?.sizes && config.sizes.length > 0
+  return supportsSizeParam.value
 })
 
 // Display size with label | 显示尺寸（带标签）
 const displaySize = computed(() => {
   const option = sizeOptions.value.find(o => o.key === localSize.value)
   return option?.label || localSize.value
+})
+
+// Size warning
+const sizeWarning = computed(() => {
+  if (!hasSizeOptions.value) return null
+  const config = currentModelConfig.value
+  if (!config?.sizes || config.sizes.length === 0) return null
+  if (!config.sizes.includes(localSize.value)) {
+    return '该模型可能不支持此尺寸'
+  }
+  return null
 })
 
 // Initialize on mount | 挂载时初始化
@@ -330,6 +357,27 @@ const handleGenerate = async () => {
     return
   }
 
+  if (!localModel.value) {
+    window.$message?.error('请选择生成模型')
+    return
+  }
+
+  if (supportsSizeParam.value) {
+    if (!localSize.value) {
+      window.$message?.error('请选择输出尺寸')
+      return
+    }
+    if (!/^\d+x\d+$/.test(localSize.value)) {
+      window.$message?.error('尺寸格式不正确，应为 1024x1024')
+      return
+    }
+  }
+
+  if (sizeWarning.value) {
+    window.$message?.error('参数错误: ' + sizeWarning.value)
+    return
+  }
+
   // Check for existing connected empty image node | 检查是否已有连接的空白图片节点
   let imageNodeId = findConnectedOutputImageNode()
   
@@ -370,9 +418,11 @@ const handleGenerate = async () => {
     const params = {
       model: localModel.value,
       prompt: prompt,
-      size: localSize.value,
       quality: localQuality.value,
       n: 1
+    }
+    if (supportsSizeParam.value) {
+      params.size = localSize.value
     }
 
     // Add reference image if provided | 如果有参考图则添加

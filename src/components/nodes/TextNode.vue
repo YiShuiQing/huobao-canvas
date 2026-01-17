@@ -27,16 +27,27 @@
         <textarea v-model="content" @blur="updateContent" @wheel.stop @mousedown.stop
           class="w-full bg-transparent resize-none outline-none text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] min-h-[80px]"
           placeholder="请输入文本内容..." />
-        <!-- Polish button | 润色按钮 -->
-        <button 
-          @click="handlePolish"
-          :disabled="isPolishing || !content.trim()"
-          class="mt-2 px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-tertiary)] hover:bg-[var(--accent-color)] hover:text-white border border-[var(--border-color)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-        >
-          <n-spin v-if="isPolishing" :size="12" />
-          <span v-else>✨</span>
-          AI 润色
-        </button>
+        
+        <div class="flex items-center justify-between mt-2">
+           <!-- Polish button | 润色按钮 -->
+          <button 
+            @click="handlePolish"
+            :disabled="isPolishing || !content.trim()"
+            class="px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-tertiary)] hover:bg-[var(--accent-color)] hover:text-white border border-[var(--border-color)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+          >
+            <n-spin v-if="isPolishing" :size="12" />
+            <span v-else>✨</span>
+            {{ isPolishing ? '润色中...' : 'AI 润色' }}
+          </button>
+          
+          <!-- Model Selector -->
+          <n-dropdown :options="modelOptions" @select="handleModelSelect" trigger="click">
+            <button class="px-2 py-1.5 text-xs rounded-lg bg-[var(--bg-tertiary)] hover:bg-[var(--bg-secondary)] border border-[var(--border-color)] transition-colors flex items-center gap-1 text-[var(--text-secondary)]" title="选择润色模型">
+                {{ displayModelName }}
+                <n-icon :size="10"><ChevronDownOutline /></n-icon>
+            </button>
+          </n-dropdown>
+        </div>
       </div>
 
       <!-- Handles | 连接点 -->
@@ -88,12 +99,13 @@
  * Text node component | 文本节点组件
  * Allows user to input and edit text content
  */
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
-import { NIcon, NSpin } from 'naive-ui'
-import { TrashOutline, ExpandOutline, CopyOutline, ImageOutline, VideocamOutline } from '@vicons/ionicons5'
+import { NIcon, NSpin, NDropdown } from 'naive-ui'
+import { TrashOutline, ExpandOutline, CopyOutline, ImageOutline, VideocamOutline, ChevronDownOutline } from '@vicons/ionicons5'
 import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes } from '../../stores/canvas'
 import { useChat, useApiConfig } from '../../hooks'
+import { textPolishingOptions, DEFAULT_CHAT_MODEL } from '../../stores/models'
 
 const props = defineProps({
   id: String,
@@ -104,12 +116,58 @@ const props = defineProps({
 const { updateNodeInternals } = useVueFlow()
 
 // API config hook | API 配置 hook
-const { isConfigured: isApiConfigured } = useApiConfig()
+const { isConfigured: isApiConfigured, availableModels, provider } = useApiConfig()
+
+// Local model state
+const localModel = ref(props.data?.model || DEFAULT_CHAT_MODEL)
 
 // Chat hook for polish | 润色用的 Chat hook
 const { send: sendChat } = useChat({
   systemPrompt: '你是一个专业的AI绘画提示词专家。将用户输入的内容美化成高质量的生图提示词，包含风格、光线、構图、细节等要素。直接返回提示词，不要其他解释。',
-  model: 'gpt-4o-mini'
+  model: localModel.value
+})
+
+// Model options
+const modelOptions = computed(() => {
+  // Start with presets
+  const options = textPolishingOptions.value.map(m => ({ label: m.label, key: m.key }))
+  
+  // Add dynamic models from API if available
+  if (availableModels.value?.length) {
+    availableModels.value.forEach(m => {
+      // Avoid duplicates
+      if (!options.find(o => o.key === m.value)) {
+        options.push({ label: m.label, key: m.value })
+      }
+    })
+  }
+  return options
+})
+
+// Auto-select valid model based on provider
+watch([modelOptions, provider], () => {
+  // If current model is default GPT-4o-mini but provider is Volcengine, try to switch to Doubao
+  if (provider.value === 'volc_engine' && localModel.value === 'gpt-4o-mini') {
+    const doubaoModel = modelOptions.value.find(m => 
+      m.key.includes('doubao') || m.label.toLowerCase().includes('doubao')
+    )
+    if (doubaoModel) {
+      localModel.value = doubaoModel.key
+      updateNode(props.id, { model: doubaoModel.key })
+    }
+  }
+}, { immediate: true })
+
+// Handle model select
+const handleModelSelect = (key) => {
+  localModel.value = key
+  updateNode(props.id, { model: key })
+}
+
+// Display model name
+const displayModelName = computed(() => {
+  const model = modelOptions.value.find(m => m.key === localModel.value)
+  return model?.label || '选择模型'
 })
 
 // Local content state | 本地内容状态
@@ -149,7 +207,7 @@ const handlePolish = async () => {
 
   try {
     // Call chat API to polish the prompt | 调用 AI 润色提示词
-    const result = await sendChat(input, true)
+    const result = await sendChat(input, true, { model: localModel.value })
     
     if (result) {
       content.value = result

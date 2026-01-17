@@ -4,6 +4,7 @@
  */
 
 import axios from 'axios'
+import { addRequestLog, updateRequestLog } from '@/stores/requestLog'
 
 // Base URL from environment or default
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.chatfire.site/v1'
@@ -17,6 +18,34 @@ const instance = axios.create({
 // Request interceptor | 请求拦截器
 instance.interceptors.request.use(
   (config) => {
+    const url = config?.url || ''
+    const type =
+      url.includes('/images') ? 'image' :
+      url.includes('/videos') ? 'video' :
+      url.includes('/chat') ? 'chat' :
+      url.includes('/models') ? 'models' :
+      'unknown'
+
+    const startTs = Date.now()
+    let requestPreview = config?.data
+    let model = ''
+    try {
+      const parsed = typeof config?.data === 'string' ? JSON.parse(config.data) : config?.data
+      model = parsed?.model || ''
+      requestPreview = parsed || config?.data
+    } catch {}
+
+    const fullUrl = `${config?.baseURL || instance.defaults.baseURL || ''}${url}`
+    const requestLogId = addRequestLog({
+      type,
+      method: (config?.method || 'GET').toUpperCase(),
+      url: fullUrl,
+      model,
+      requestPreview
+    })
+    config._requestLogId = requestLogId
+    config._requestStartTs = startTs
+
     // Get API key from localStorage | 从 localStorage 获取 API key
     const apiKey = localStorage.getItem('apiKey')
     
@@ -39,6 +68,16 @@ instance.interceptors.request.use(
 // Response interceptor | 响应拦截器
 instance.interceptors.response.use(
   (res) => {
+    const startTs = res?.config?._requestStartTs
+    const requestLogId = res?.config?._requestLogId
+    if (requestLogId) {
+      updateRequestLog(requestLogId, {
+        status: 'success',
+        httpStatus: res.status,
+        durationMs: startTs ? Date.now() - startTs : null,
+        responsePreview: res?.data
+      })
+    }
     const { data, code, message } = res.data || {}
     
     // Handle stream response | 处理流响应
@@ -62,10 +101,21 @@ instance.interceptors.response.use(
   },
   (error) => {
     const { response } = error
+    const startTs = error?.config?._requestStartTs
+    const requestLogId = error?.config?._requestLogId
     
     if (response) {
       const { status, data } = response
       const message = data?.message || data?.error?.message || error.message
+      if (requestLogId) {
+        updateRequestLog(requestLogId, {
+          status: 'error',
+          httpStatus: status,
+          durationMs: startTs ? Date.now() - startTs : null,
+          errorMessage: message || '请求失败',
+          responsePreview: data
+        })
+      }
       
       if (status === 401) {
         window.$message?.error('API Key 无效或已过期')
@@ -75,6 +125,14 @@ instance.interceptors.response.use(
         window.$message?.error(message || '请求失败')
       }
     } else {
+      if (requestLogId) {
+        updateRequestLog(requestLogId, {
+          status: 'error',
+          httpStatus: null,
+          durationMs: startTs ? Date.now() - startTs : null,
+          errorMessage: error.message || '网络错误'
+        })
+      }
       window.$message?.error(error.message || '网络错误')
     }
     
@@ -87,6 +145,7 @@ instance.interceptors.response.use(
  * @param {string} url - Base URL
  */
 export const setBaseUrl = (url) => {
+  // Directly use the configured URL without proxy replacement
   instance.defaults.baseURL = url
 }
 

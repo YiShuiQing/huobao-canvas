@@ -27,6 +27,13 @@
             <MoonOutline v-else />
           </n-icon>
         </button>
+        <button
+          @click="showRequestLogs = true"
+          class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
+          title="请求日志"
+        >
+          <n-icon :size="20"><ListOutline /></n-icon>
+        </button>
         <button 
           @click="showDownloadModal = true"
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
@@ -229,6 +236,7 @@
 
     <!-- API Settings Modal | API 设置弹窗 -->
     <ApiSettings v-model:show="showApiSettings" />
+    <RequestLogModal v-model:show="showRequestLogs" />
 
     <!-- Rename Modal | 重命名弹窗 -->
     <n-modal v-model:show="showRenameModal" preset="dialog" title="重命名项目">
@@ -273,6 +281,7 @@ import {
   SunnyOutline, 
   MoonOutline,
   SettingsOutline,
+  ListOutline,
   AddOutline,
   ImageOutline,
   SendOutline,
@@ -299,6 +308,7 @@ import { projects, initProjectsStore, updateProject, renameProject, currentProje
 import ApiSettings from '../components/ApiSettings.vue'
 import DownloadModal from '../components/DownloadModal.vue'
 import WorkflowPanel from '../components/WorkflowPanel.vue'
+import RequestLogModal from '../components/RequestLogModal.vue'
 
 // API Config hook | API 配置 hook
 const { isConfigured: isApiConfigured } = useApiConfig()
@@ -385,6 +395,7 @@ const autoExecute = ref(true)
 const isMobile = ref(false)
 const showGrid = ref(true)
 const showApiSettings = ref(false)
+const showRequestLogs = ref(false)
 const isProcessing = ref(false)
 
 // Flow key for forcing re-render on project switch | 项目切换时强制重新渲染的 key
